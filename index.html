@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MPI - Relasi dan Fungsi</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Amiri:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- html2pdf -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        arabic: ['Amiri', 'serif'],
+                    },
+                    colors: {
+                        kemenag: {
+                            green: '#0F5132',
+                            light: '#198754',
+                            gold: '#D4AF37',
+                            bg: '#F3F4F6'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom Animations & Styles */
+        body { background-color: #f0fdf4; overflow-x: hidden; }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        .slide-up { animation: slideUp 0.5s ease-out; }
+        .pulse-slow { animation: pulse 3s infinite; }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        /* Game Styles */
+        #game-board {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            height: 500px;
+            background: #374151;
+            overflow: hidden;
+            margin: 0 auto;
+            border-radius: 12px;
+            border: 4px solid #D4AF37;
+        }
+        .road-line {
+            position: absolute;
+            width: 4px;
+            height: 100%;
+            background: dashed 20px rgba(255,255,255,0.5);
+            left: 50%;
+            transform: translateX(-50%);
+            animation: moveRoad 1s linear infinite;
+        }
+        @keyframes moveRoad { from { background-position: 0 -40px; } to { background-position: 0 0; } }
+        
+        .car {
+            position: absolute;
+            bottom: 20px;
+            width: 60px;
+            height: 100px;
+            background-color: #ef4444;
+            border-radius: 8px;
+            transition: left 0.2s ease-out;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 24px;
+        }
+        .car::before { content: '🏎️'; font-size: 40px; }
+        
+        .obstacle {
+            position: absolute;
+            width: 140px;
+            background: white;
+            border-radius: 8px;
+            padding: 5px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            border: 2px solid #0F5132;
+        }
+        
+        .diagram-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            height: 60px;
+            position: relative;
+        }
+        .node-col { display: flex; flex-direction: column; justify-content: space-around; height: 100%; z-index: 2; }
+        .node { width: 16px; height: 16px; background: #D4AF37; border-radius: 50%; display:inline-block;}
+        .svg-lines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+        /* Print Media */
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+
+        .hide { display: none !important; }
+    </style>
+</head>
+<body class="text-gray-800 antialiased selection:bg-green-200 selection:text-green-900">
+
+    <!-- Global Alert Modal -->
+    <div id="alert-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm hide">
+        <div class="glass-panel p-6 rounded-2xl w-11/12 max-w-sm text-center slide-up">
+            <div id="alert-icon" class="text-4xl mb-4 text-amber-500"><i class="fas fa-exclamation-circle"></i></div>
+            <h3 id="alert-title" class="text-xl font-bold text-kemenag-green mb-2">Perhatian</h3>
+            <p id="alert-message" class="text-gray-600 mb-6">Pesan di sini</p>
+            <button onclick="closeAlert()" class="bg-kemenag-green text-white px-6 py-2 rounded-full font-semibold hover:bg-green-800 transition shadow-lg">Mengerti</button>
+        </div>
+    </div>
+
+    <!-- 1. SPLASH SCREEN -->
+    <section id="splash-screen" class="fixed inset-0 bg-kemenag-green z-50 flex flex-col items-center justify-center text-white">
+        <svg class="w-32 h-32 pulse-slow text-kemenag-gold mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path>
+        </svg>
+        <h1 class="text-3xl font-bold tracking-widest fade-in">MPI MATEMATIKA</h1>
+        <p class="text-kemenag-gold mt-2 fade-in">Relasi dan Fungsi</p>
+    </section>
+
+    <!-- 2. COVER PAGE -->
+    <section id="cover-page" class="min-h-screen flex flex-col items-center justify-center bg-cover bg-center hide relative" style="background-image: linear-gradient(rgba(15, 81, 50, 0.8), rgba(15, 81, 50, 0.8)), url('https://placehold.co/1920x1080/0F5132/D4AF37?text=Gorontalo+Pattern');">
+        <div class="glass-panel p-8 rounded-3xl text-center max-w-lg w-11/12 slide-up shadow-2xl">
+            <span class="bg-kemenag-gold text-kemenag-green px-4 py-1 rounded-full text-sm font-bold tracking-wide uppercase shadow">MTs Kelas VIII - Fase D</span>
+            <h1 class="text-4xl md:text-5xl font-extrabold text-kemenag-green mt-6 mb-2">Relasi & Fungsi</h1>
+            
+            <!-- Contextual Animated SVG -->
+            <div class="my-6 flex justify-center">
+                <svg class="w-40 h-40 text-kemenag-green animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+            </div>
+
+            <div class="space-y-4 w-full">
+                <button onclick="showModal('dev-info')" class="w-full border-2 border-kemenag-green text-kemenag-green py-3 rounded-xl font-bold hover:bg-green-50 transition flex items-center justify-center gap-2">
+                    <i class="fas fa-user-tie"></i> Informasi Pengembang
+                </button>
+                <button onclick="showModal('learning-obj')" class="w-full border-2 border-kemenag-green text-kemenag-green py-3 rounded-xl font-bold hover:bg-green-50 transition flex items-center justify-center gap-2">
+                    <i class="fas fa-bullseye"></i> Tujuan Pembelajaran
+                </button>
+                <button onclick="navTo('login-page')" class="w-full bg-gradient-to-r from-kemenag-green to-green-700 text-white py-4 rounded-xl font-bold text-lg hover:shadow-lg transform hover:-translate-y-1 transition flex items-center justify-center gap-2 shadow-md">
+                    <i class="fas fa-play"></i> MULAI BELAJAR
+                </button>
+            </div>
+        </div>
+
+        <!-- Floating Slide: Dev Info -->
+        <div id="dev-info" class="fixed inset-0 z-40 items-center justify-center bg-black/50 backdrop-blur-sm hide flex">
+            <div class="glass-panel p-8 rounded-2xl max-w-sm w-11/12 text-center relative slide-up border-t-4 border-kemenag-gold">
+                <div class="w-32 h-32 mx-auto rounded-full overflow-hidden border-4 border-kemenag-gold shadow-lg mb-4 bg-gray-200 flex items-center justify-center">
+                    <img src="https://placehold.co/150x150/0F5132/D4AF37?text=NL" alt="Foto Pengembang" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/150x150/cccccc/ffffff?text=NL'">
+                </div>
+                <h2 class="text-2xl font-bold text-kemenag-green">Nurhayati Lamasika, S.Pd., Gr.</h2>
+                <p class="text-gray-600 font-semibold mt-1"><i class="fas fa-school text-kemenag-gold"></i> MTsN 2 Pohuwato</p>
+                <p class="text-gray-500 text-sm mt-1"><i class="fas fa-envelope text-kemenag-gold"></i> guru.madrasah@kemenag.go.id</p>
+                <button onclick="closeModal('dev-info')" class="mt-6 w-full bg-gray-800 text-white py-2 rounded-lg hover:bg-gray-700 transition">Kembali ke Cover</button>
+            </div>
+        </div>
+
+        <!-- Floating Slide: Objective -->
+        <div id="learning-obj" class="fixed inset-0 z-40 items-center justify-center bg-black/50 backdrop-blur-sm hide flex">
+            <div class="glass-panel p-8 rounded-2xl max-w-md w-11/12 text-center relative slide-up border-t-4 border-kemenag-green">
+                <div class="text-4xl text-kemenag-gold mb-4"><i class="fas fa-book-open"></i></div>
+                <h2 class="text-2xl font-bold text-kemenag-green mb-4">Tujuan Pembelajaran</h2>
+                <p class="text-lg text-gray-800 font-medium mb-4 bg-green-50 p-4 rounded-lg border border-green-200">
+                    "Murid dapat membedakan diagram yang termasuk fungsi dan bukan fungsi."
+                </p>
+                
+                <div class="text-right mb-4">
+                    <p class="font-arabic text-2xl text-kemenag-green leading-relaxed">إِنَّا كُلَّ شَيْءٍ خَلَقْنَاهُ بِقَدَرٍ</p>
+                    <p class="text-sm text-gray-600 italic mt-2 text-justify">
+                        "Sungguh, Kami menciptakan segala sesuatu menurut ukuran." (QS. Al-Qamar: 49)
+                    </p>
+                </div>
+                <div class="bg-amber-50 p-3 rounded-lg text-sm text-left border border-amber-200">
+                    <p class="font-semibold text-amber-800"><i class="fas fa-heart text-red-500"></i> Kurikulum Berbasis Cinta:</p>
+                    <p class="text-gray-700 mt-1">Belajar relasi & fungsi melatih kita adil dan menghargai keteraturan ciptaan Allah dalam kehidupan dan alam Gorontalo tercinta.</p>
+                </div>
+
+                <button onclick="closeModal('learning-obj')" class="mt-6 w-full bg-gray-800 text-white py-2 rounded-lg hover:bg-gray-700 transition">Kembali ke Cover</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. LOGIN FORM -->
+    <section id="login-page" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100 hide">
+        <div class="glass-panel p-8 rounded-3xl w-11/12 max-w-md shadow-xl slide-up">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-kemenag-green text-white rounded-full flex items-center justify-center text-2xl mx-auto mb-3 shadow-lg"><i class="fas fa-user-graduate"></i></div>
+                <h2 class="text-2xl font-bold text-kemenag-green">Identitas Siswa</h2>
+                <p class="text-gray-500 text-sm">Silakan isi data diri sebelum memulai.</p>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-1 ml-1 text-sm">Nama Lengkap</label>
+                    <input type="text" id="student-name" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-kemenag-green bg-white/50" placeholder="Contoh: Ahmad Abdullah">
+                </div>
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-1 ml-1 text-sm">Kelas</label>
+                    <select id="student-class" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-kemenag-green bg-white/50">
+                        <option value="">Pilih Kelas...</option>
+                        <option value="VIII-A">VIII-A</option>
+                        <option value="VIII-B">VIII-B</option>
+                        <option value="VIII-C">VIII-C</option>
+                    </select>
+                </div>
+                <button onclick="submitLogin()" class="w-full bg-kemenag-green text-white py-3 rounded-xl font-bold hover:bg-green-800 transition mt-4 shadow-md">Lanjutkan <i class="fas fa-arrow-right ml-2"></i></button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. ONBOARDING PANDUAN (SLIDER) -->
+    <section id="onboarding-page" class="min-h-screen flex flex-col bg-emerald-50 hide">
+        <div class="flex-1 flex flex-col justify-center items-center p-6 relative">
+            
+            <!-- Progress dots -->
+            <div class="absolute top-8 flex gap-2" id="onboard-dots">
+                <!-- Dots generated by JS -->
+            </div>
+
+            <div class="glass-panel w-full max-w-2xl rounded-3xl p-8 text-center shadow-xl min-h-[400px] flex flex-col justify-center relative overflow-hidden" id="onboard-content">
+                <!-- Content injected by JS -->
+            </div>
+            
+            <div class="flex w-full max-w-2xl justify-between mt-8">
+                <button id="btn-onboard-prev" onclick="changeOnboard(-1)" class="px-6 py-3 rounded-full bg-white text-kemenag-green font-bold shadow-md hover:bg-gray-100 disabled:opacity-50 transition"><i class="fas fa-chevron-left mr-2"></i> Kembali</button>
+                <button id="btn-onboard-next" onclick="changeOnboard(1)" class="px-6 py-3 rounded-full bg-kemenag-green text-white font-bold shadow-md hover:bg-green-800 transition">Selanjutnya <i class="fas fa-chevron-right ml-2"></i></button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. DASHBOARD MENU UTAMA -->
+    <section id="dashboard-page" class="min-h-screen bg-gray-100 hide flex flex-col">
+        <!-- Header -->
+        <header class="bg-kemenag-green text-white p-6 shadow-md rounded-b-3xl">
+            <div class="max-w-4xl mx-auto flex justify-between items-center">
+                <div>
+                    <h2 class="text-sm text-green-200">Selamat Belajar,</h2>
+                    <p class="text-xl font-bold" id="dash-name">Nama Siswa</p>
+                    <p class="text-xs bg-green-800 inline-block px-2 py-1 rounded mt-1" id="dash-class">Kelas</p>
+                </div>
+                <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center text-kemenag-green text-xl shadow-inner">
+                    <i class="fas fa-user"></i>
+                </div>
+            </div>
+        </header>
+
+        <!-- Menu Cards -->
+        <div class="flex-1 p-6 flex items-center justify-center">
+            <div class="max-w-4xl w-full grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                <!-- Menu Belajar -->
+                <div onclick="openMenu('belajar')" class="bg-white rounded-3xl p-6 shadow-lg border-b-4 border-blue-500 cursor-pointer hover:-translate-y-2 transition relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-blue-100 rounded-bl-full -z-10 group-hover:scale-110 transition"></div>
+                    <div class="text-blue-500 text-4xl mb-4"><i class="fas fa-book-reader"></i></div>
+                    <h3 class="text-2xl font-bold text-gray-800">BELAJAR</h3>
+                    <p class="text-gray-500 text-sm mt-2">Pahami konsep dasar relasi & fungsi.</p>
+                    <div class="mt-4 flex items-center justify-between">
+                        <span class="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded">Materi Inti</span>
+                        <i class="fas fa-unlock text-green-500"></i>
+                    </div>
+                </div>
+
+                <!-- Menu Bermain -->
+                <div onclick="openMenu('bermain')" id="card-bermain" class="bg-white rounded-3xl p-6 shadow-lg border-b-4 border-amber-500 cursor-pointer hover:-translate-y-2 transition relative overflow-hidden group opacity-75">
+                    <div class="absolute inset-0 bg-gray-100/50 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center lock-overlay">
+                        <i class="fas fa-lock text-4xl text-gray-400 mb-2"></i>
+                        <span class="text-xs text-gray-500 font-bold bg-white px-3 py-1 rounded-full shadow">Selesaikan Belajar</span>
+                    </div>
+                    <div class="text-amber-500 text-4xl mb-4"><i class="fas fa-gamepad"></i></div>
+                    <h3 class="text-2xl font-bold text-gray-800">BERMAIN</h3>
+                    <p class="text-gray-500 text-sm mt-2">Game Edukasi Balap Relasi Fungsi.</p>
+                    <div class="mt-4 flex items-center justify-between">
+                        <span class="text-xs font-bold text-amber-500 bg-amber-50 px-2 py-1 rounded">Tantangan</span>
+                        <i class="fas fa-lock text-gray-400 lock-icon"></i>
+                    </div>
+                </div>
+
+                <!-- Menu Berlatih -->
+                <div onclick="openMenu('berlatih')" id="card-berlatih" class="bg-white rounded-3xl p-6 shadow-lg border-b-4 border-red-500 cursor-pointer hover:-translate-y-2 transition relative overflow-hidden group opacity-75">
+                    <div class="absolute inset-0 bg-gray-100/50 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center lock-overlay">
+                        <i class="fas fa-lock text-4xl text-gray-400 mb-2"></i>
+                        <span class="text-xs text-gray-500 font-bold bg-white px-3 py-1 rounded-full shadow">Selesaikan Bermain</span>
+                    </div>
+                    <div class="text-red-500 text-4xl mb-4"><i class="fas fa-pen-nib"></i></div>
+                    <h3 class="text-2xl font-bold text-gray-800">BERLATIH</h3>
+                    <p class="text-gray-500 text-sm mt-2">Uji kemampuan literasi & numerasimu.</p>
+                    <div class="mt-4 flex items-center justify-between">
+                        <span class="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded">Asesmen</span>
+                        <i class="fas fa-lock text-gray-400 lock-icon"></i>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- 6. LAYER BELAJAR (MATERI MENDALAM) -->
+    <section id="belajar-page" class="min-h-screen bg-white hide flex flex-col">
+        <!-- Header -->
+        <div class="bg-blue-600 text-white p-4 flex justify-between items-center sticky top-0 z-30 shadow-md">
+            <button onclick="navTo('dashboard-page')" class="text-white hover:text-blue-200"><i class="fas fa-arrow-left text-xl"></i></button>
+            <h2 class="font-bold">Materi Belajar</h2>
+            <div class="text-sm font-bold bg-blue-800 px-3 py-1 rounded-full"><span id="materi-counter">1</span> / 5</div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto pb-24">
+            <div class="max-w-3xl mx-auto p-6" id="materi-content">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+
+        <!-- Bottom Quiz Action -->
+        <div class="fixed bottom-0 left-0 w-full bg-gray-50 border-t p-4 z-30">
+            <div class="max-w-3xl mx-auto flex justify-between items-center">
+                <button id="btn-materi-prev" onclick="changeMateri(-1)" class="px-4 py-2 text-gray-600 font-bold hidden">Sebelumnya</button>
+                <div class="flex-1 text-center text-sm font-semibold text-blue-600" id="quiz-status">Selesaikan tantangan di atas untuk lanjut!</div>
+                <button id="btn-materi-next" onclick="changeMateri(1)" class="px-6 py-2 bg-blue-600 text-white font-bold rounded-full shadow hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">Lanjut <i class="fas fa-chevron-right ml-1"></i></button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 7. LAYER BERMAIN (RACING GAME) -->
+    <section id="bermain-page" class="min-h-screen bg-gray-900 hide flex flex-col font-sans relative">
+        <!-- Header -->
+        <div class="bg-amber-600 text-white p-4 flex justify-between items-center z-30 shadow-md relative">
+            <button onclick="navTo('dashboard-page')" class="text-white hover:text-amber-200"><i class="fas fa-arrow-left text-xl"></i></button>
+            <h2 class="font-bold">Balap Relasi Fungsi</h2>
+            <div class="text-sm font-bold bg-amber-800 px-3 py-1 rounded-full">Skor: <span id="game-score">0</span></div>
+        </div>
+        
+        <!-- Game Info Overlays -->
+        <div class="absolute top-20 left-0 w-full text-center z-20 pointer-events-none">
+            <p class="text-white bg-black/50 inline-block px-4 py-1 rounded-full text-sm">Ambil Box <b>FUNGSI</b>. Hindari Box <b>BUKAN FUNGSI</b>!</p>
+        </div>
+
+        <!-- Game Container -->
+        <div class="flex-1 flex items-center justify-center p-2 relative">
+            
+            <div id="game-board">
+                <div class="road-line"></div>
+                <!-- 2 Lanes dividing -->
+                <div class="absolute top-0 left-1/2 w-[2px] h-full bg-white/20"></div>
+                
+                <div id="player-car" class="car" style="left: 20%;"></div>
+                
+                <!-- Obstacles will be appended here by JS -->
+            </div>
+
+            <!-- Start Game Overlay -->
+            <div id="game-start-overlay" class="absolute inset-0 bg-black/80 z-30 flex flex-col items-center justify-center text-white">
+                <h2 class="text-3xl font-bold text-amber-500 mb-4">Misi Balap</h2>
+                <p class="text-center max-w-sm mb-6">Arahkan mobil ke lajur yang berisi diagram panah <b>FUNGSI</b>.<br>Jika itu <b>BUKAN FUNGSI</b>, hindari!</p>
+                <button onclick="startGame()" class="bg-amber-500 text-gray-900 px-8 py-3 rounded-full font-bold text-xl hover:bg-amber-400 transition animate-bounce">MULAI BERMAIN</button>
+            </div>
+            
+             <!-- End Game Overlay -->
+             <div id="game-end-overlay" class="absolute inset-0 bg-black/90 z-40 flex flex-col items-center justify-center text-white hide">
+                <h2 class="text-3xl font-bold text-amber-500 mb-2">Permainan Selesai!</h2>
+                <p class="text-xl mb-4">Skor Akhir: <span id="final-score" class="font-bold text-2xl text-green-400">0</span> / 100</p>
+                <p id="game-feedback" class="text-center max-w-sm mb-6 text-gray-300">Luar biasa! Kamu telah menguasai membedakan fungsi.</p>
+                <button onclick="finishGame()" class="bg-kemenag-green text-white px-8 py-3 rounded-full font-bold text-lg hover:bg-green-700 transition">Buka Kunci Berlatih <i class="fas fa-unlock ml-2"></i></button>
+            </div>
+        </div>
+
+        <!-- Mobile Controls -->
+        <div class="p-4 bg-gray-800 flex justify-between gap-4 z-30">
+            <button onclick="moveCarMobile('left')" class="flex-1 bg-gray-700 active:bg-gray-600 text-white p-6 rounded-2xl shadow-lg border-b-4 border-gray-900 flex justify-center items-center h-24">
+                <i class="fas fa-arrow-left text-4xl"></i>
+            </button>
+            <button onclick="moveCarMobile('right')" class="flex-1 bg-gray-700 active:bg-gray-600 text-white p-6 rounded-2xl shadow-lg border-b-4 border-gray-900 flex justify-center items-center h-24">
+                <i class="fas fa-arrow-right text-4xl"></i>
+            </button>
+        </div>
+    </section>
+
+    <!-- 8. LAYER BERLATIH (ASESMEN) -->
+    <section id="berlatih-page" class="min-h-screen bg-gray-50 hide flex flex-col">
+        <!-- Header -->
+        <div class="bg-red-600 text-white p-4 flex justify-between items-center sticky top-0 z-30 shadow-md">
+            <button onclick="navTo('dashboard-page')" class="text-white hover:text-red-200"><i class="fas fa-times text-xl"></i></button>
+            <h2 class="font-bold">Asesmen Berlatih</h2>
+            <div class="text-sm font-bold bg-red-800 px-3 py-1 rounded-full"><span id="soal-counter">1</span> / 10</div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-4 md:p-8">
+            <div class="max-w-4xl mx-auto bg-white rounded-3xl shadow-lg p-6 md:p-8">
+                
+                <div class="flex justify-between items-center mb-4 pb-4 border-b border-gray-200">
+                    <span id="soal-level-badge" class="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">Level 1 - Pemahaman</span>
+                    <span id="soal-bobot" class="text-gray-500 text-sm font-semibold">Bobot: 8 Poin</span>
+                </div>
+
+                <!-- Stimulus Bacaan -->
+                <div class="bg-orange-50 border-l-4 border-orange-400 p-4 mb-6 rounded-r-lg">
+                    <h4 class="font-bold text-orange-800 mb-2 text-sm"><i class="fas fa-book-reader mr-1"></i> Bacalah teks berikut dengan saksama:</h4>
+                    <div id="soal-stimulus" class="text-gray-700 text-sm md:text-base leading-relaxed text-justify whitespace-pre-line font-serif">
+                        <!-- Stimulus injected -->
+                    </div>
+                </div>
+
+                <!-- Pertanyaan -->
+                <h3 id="soal-pertanyaan" class="text-lg font-bold text-gray-800 mb-6">Pertanyaan...</h3>
+
+                <!-- Opsi Jawaban -->
+                <div id="soal-opsi" class="space-y-3">
+                    <!-- Options injected -->
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="bg-white border-t p-4 z-30">
+            <div class="max-w-4xl mx-auto flex justify-between items-center">
+                <button id="btn-soal-prev" onclick="changeSoal(-1)" class="px-4 py-2 text-gray-600 font-bold hidden">Sebelumnya</button>
+                <div class="flex-1"></div>
+                <button id="btn-soal-next" onclick="changeSoal(1)" class="px-8 py-3 bg-red-600 text-white font-bold rounded-full shadow-lg hover:bg-red-700 disabled:opacity-50 transition">Selanjutnya <i class="fas fa-chevron-right ml-2"></i></button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 9. LAPORAN PDF (HASIL BELAJAR) -->
+    <section id="report-page" class="min-h-screen bg-gray-200 hide py-10 px-4 flex flex-col items-center">
+        
+        <div class="w-full max-w-4xl mb-6 flex justify-between items-center no-print">
+            <button onclick="navTo('dashboard-page')" class="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-700"><i class="fas fa-home"></i> Ke Beranda</button>
+            <button onclick="generatePDF()" class="bg-kemenag-green text-white px-6 py-2 rounded-lg font-bold shadow-lg hover:bg-green-700 transition flex items-center gap-2"><i class="fas fa-file-pdf"></i> Unduh Laporan PDF</button>
+        </div>
+
+        <!-- Print Area -->
+        <div id="print-area" class="bg-white w-full max-w-4xl min-h-[1056px] shadow-2xl p-10 md:p-16 relative">
+            
+            <!-- Header KOP -->
+            <div class="border-b-4 border-double border-kemenag-green pb-4 mb-6 flex items-center justify-between">
+                <div class="flex-1 text-center">
+                    <h1 class="text-2xl font-bold text-kemenag-green uppercase">Laporan Hasil Belajar Mandiri</h1>
+                    <h2 class="text-xl font-bold text-gray-800">Media Pembelajaran Interaktif (MPI)</h2>
+                    <p class="text-sm font-semibold text-gray-600 mt-1">Mata Pelajaran Matematika - Materi Relasi dan Fungsi</p>
+                </div>
+            </div>
+
+            <!-- Dev Info -->
+            <div class="text-right text-xs text-gray-500 mb-6 italic">
+                Dikembangkan oleh: <b>Nurhayati Lamasika, S.Pd., Gr.</b> | MTsN 2 Pohuwato | Kemenag RI
+            </div>
+
+            <!-- Student Data -->
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-8 flex flex-wrap gap-x-12 gap-y-2">
+                <div><span class="text-gray-500 text-sm">Nama Siswa:</span><br><b id="rep-name" class="text-lg">Nama</b></div>
+                <div><span class="text-gray-500 text-sm">Kelas:</span><br><b id="rep-class" class="text-lg">Kelas</b></div>
+                <div><span class="text-gray-500 text-sm">Tanggal Penyelesaian:</span><br><b id="rep-date" class="text-lg">Tanggal</b></div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                
+                <!-- Game Report -->
+                <div class="border rounded-xl p-6 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-amber-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg"><i class="fas fa-gamepad"></i> BERMAIN</div>
+                    <h3 class="font-bold text-gray-800 mb-4 border-b pb-2">Performa Game Balap</h3>
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-gray-600">Skor Akhir:</span>
+                        <span id="rep-game-score" class="text-2xl font-bold text-amber-600">0</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                        <div id="rep-game-bar" class="bg-amber-600 h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                    <p class="text-sm text-gray-600 text-justify">Siswa telah melatih kecepatan dan ketepatan penalaran dalam membedakan diagram panah fungsi dan bukan fungsi dalam simulasi interaktif.</p>
+                </div>
+
+                <!-- Quiz Report -->
+                <div class="border rounded-xl p-6 relative overflow-hidden bg-green-50/50">
+                    <div class="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg"><i class="fas fa-pen"></i> BERLATIH</div>
+                    <h3 class="font-bold text-gray-800 mb-4 border-b pb-2">Hasil Asesmen Literasi & Numerasi</h3>
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-gray-600">Nilai Akhir:</span>
+                        <span id="rep-quiz-score" class="text-4xl font-extrabold text-kemenag-green">0</span>
+                    </div>
+                    <p id="rep-predikat" class="text-right text-sm font-bold text-blue-600 mb-4">PREDIKAT</p>
+                    
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between"><span class="text-gray-600">Level 1 (Dasar):</span> <b id="rep-l1">0/3</b></div>
+                        <div class="flex justify-between"><span class="text-gray-600">Level 2 (Penerapan):</span> <b id="rep-l2">0/4</b></div>
+                        <div class="flex justify-between"><span class="text-gray-600">Level 3 (HOTS):</span> <b id="rep-l3">0/3</b></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KBC Notes -->
+            <div class="bg-emerald-50 border border-emerald-200 p-6 rounded-xl mb-8">
+                <h3 class="font-bold text-kemenag-green mb-2 flex items-center gap-2"><i class="fas fa-heart text-red-500"></i> Catatan Kurikulum Berbasis Cinta (KBC)</h3>
+                <p class="text-sm text-gray-700 text-justify leading-relaxed">
+                    Siswa tidak hanya belajar konsep matematis relasi dan fungsi, tetapi juga memahami esensi keteraturan, keadilan, dan keseimbangan penciptaan Allah SWT di alam semesta. Melalui studi kasus lokal Gorontalo (seperti pelestarian Hiu Paus, Danau Limboto, dan kearifan lokal Karawo), siswa diajak memupuk cinta kepada Sang Pencipta, kasih sayang kepada sesama makhluk, pelestarian lingkungan hidup, serta rasa bangga dan cinta tanah air.
+                </p>
+            </div>
+
+            <!-- Guru Signature -->
+            <div class="flex justify-end mt-12">
+                <div class="text-center">
+                    <p class="text-sm text-gray-600 mb-16">Pohuwato, <span id="rep-today">Tanggal</span><br>Guru Mata Pelajaran,</p>
+                    <p class="font-bold text-gray-800 underline">Nurhayati Lamasika, S.Pd., Gr.</p>
+                    <p class="text-xs text-gray-500">NIP. -</p>
+                </div>
+            </div>
+
+            <div class="absolute bottom-4 left-0 w-full text-center text-xs text-gray-400 font-mono">
+                Generated securely via MPI Local App System
+            </div>
+        </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- JAVASCRIPT LOGIC -->
+    <!-- ========================================== -->
+    <script>
+        // --- KONFIGURASI GOOGLE APPS SCRIPT ---
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbz2ji-69UdeodGHP00Ocqi3eLiB-dSqTq11LKudYGZnw_hp4moQOvOUYV3tyuu2vtnKlQ/exec";
+
+        // State Management
+        const appState = {
+            student: { name: '', class: '' },
+            progress: {
+                belajarCompleted: false,
+                bermainCompleted: false,
+                berlatihCompleted: false
+            },
+            scores: {
+                game: 0,
+                quiz: { total: 0, l1: 0, l2: 0, l3: 0 }, // max points: L1(24), L2(40), L3(36) = 100
+                answers: []
+            }
+        };
+
+        // Navigation Utils
+        function navTo(sectionId) {
+            document.querySelectorAll('section').forEach(sec => sec.classList.add('hide'));
+            document.getElementById(sectionId).classList.remove('hide');
+            window.scrollTo(0, 0);
+        }
+
+        function showModal(id) { document.getElementById(id).classList.remove('hide'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hide'); }
+
+        function showCustomAlert(title, message) {
+            document.getElementById('alert-title').innerText = title;
+            document.getElementById('alert-message').innerHTML = message;
+            document.getElementById('alert-modal').classList.remove('hide');
+        }
+        function closeAlert() { document.getElementById('alert-modal').classList.add('hide'); }
+
+        // 1. Splash Screen Initialization
+        window.onload = () => {
+            setTimeout(() => {
+                navTo('cover-page');
+            }, 2000);
+        };
+
+        // 3. Login Logic
+        function submitLogin() {
+            const name = document.getElementById('student-name').value.trim();
+            const cls = document.getElementById('student-class').value;
+            if(!name || !cls) {
+                showCustomAlert("Data Tidak Lengkap", "Mohon isi Nama Lengkap dan Kelas Anda untuk melanjutkan pembelajaran.");
+                return;
+            }
+            appState.student.name = name;
+            appState.student.class = cls;
+            
+            // Update Dashboard UI
+            document.getElementById('dash-name').innerText = name;
+            document.getElementById('dash-class').innerText = cls;
+            
+            initOnboarding();
+            navTo('onboarding-page');
+        }
+
+        // 4. Onboarding Logic
+        const onboardSlides = [
+            { icon: 'fa-hand-sparkles', title: 'Selamat Datang!', desc: `Halo <b>${appState.student.name}</b>! Selamat datang di Media Pembelajaran Interaktif Matematika.` },
+            { icon: 'fa-map-marked-alt', title: 'Belajar Terarah', desc: 'Selesaikan menu secara berurutan: <br>1. Belajar<br>2. Bermain<br>3. Berlatih' },
+            { icon: 'fa-mosque', title: 'Nilai Kebaikan', desc: 'Temukan hikmah Al-Qur\'an dan pelajari keteraturan alam Gorontalo yang indah melalui matematika.' }
+        ];
+        let currentOnboard = 0;
+
+        function initOnboarding() {
+            currentOnboard = 0;
+            renderOnboard();
+        }
+
+        function renderOnboard() {
+            const content = document.getElementById('onboard-content');
+            const dots = document.getElementById('onboard-dots');
+            
+            // Dynamic message based on name
+            onboardSlides[0].desc = `Halo <b class="text-kemenag-green">${appState.student.name}</b>! Selamat datang di Media Pembelajaran Interaktif Matematika.`;
+
+            const slide = onboardSlides[currentOnboard];
+            content.innerHTML = `
+                <div class="text-6xl text-kemenag-gold mb-6 slide-up"><i class="fas ${slide.icon}"></i></div>
+                <h2 class="text-3xl font-bold text-gray-800 mb-4 fade-in">${slide.title}</h2>
+                <p class="text-lg text-gray-600 fade-in">${slide.desc}</p>
+            `;
+
+            dots.innerHTML = onboardSlides.map((_, i) => 
+                `<div class="w-3 h-3 rounded-full ${i === currentOnboard ? 'bg-kemenag-green w-6 transition-all' : 'bg-green-200'}"></div>`
+            ).join('');
+
+            document.getElementById('btn-onboard-prev').disabled = currentOnboard === 0;
+            const btnNext = document.getElementById('btn-onboard-next');
+            if (currentOnboard === onboardSlides.length - 1) {
+                btnNext.innerHTML = 'Masuk Menu Utama <i class="fas fa-sign-in-alt ml-2"></i>';
+                btnNext.onclick = () => navTo('dashboard-page');
+            } else {
+                btnNext.innerHTML = 'Selanjutnya <i class="fas fa-chevron-right ml-2"></i>';
+                btnNext.onclick = () => changeOnboard(1);
+            }
+        }
+
+        function changeOnboard(dir) {
+            currentOnboard += dir;
+            renderOnboard();
+        }
+
+        // 5. Dashboard Menu Lock Logic
+        function openMenu(menu) {
+            if (menu === 'belajar') {
+                initBelajar();
+                navTo('belajar-page');
+            } else if (menu === 'bermain') {
+                if (!appState.progress.belajarCompleted) {
+                    showCustomAlert("Menu Terkunci 🔒", "Selesaikan materi di menu <b>BELAJAR</b> terlebih dahulu untuk membuka game ini.");
+                } else {
+                    navTo('bermain-page');
+                }
+            } else if (menu === 'berlatih') {
+                if (!appState.progress.bermainCompleted) {
+                    showCustomAlert("Menu Terkunci 🔒", "Mainkan game di menu <b>BERMAIN</b> hingga selesai untuk membuka asesmen.");
+                } else {
+                    initBerlatih();
+                    navTo('berlatih-page');
+                }
+            }
+        }
+
+        function unlockMenu(menuId) {
+            const card = document.getElementById(`card-${menuId}`);
+            card.classList.remove('opacity-75');
+            const overlay = card.querySelector('.lock-overlay');
+            if(overlay) overlay.remove();
+            const icon = card.querySelector('.lock-icon');
+            if(icon) {
+                icon.classList.remove('fa-lock', 'text-gray-400');
+                icon.classList.add('fa-unlock', 'text-green-500');
+            }
+        }
+
+        // 6. Belajar Logic (5 Slides)
+        const materiData = [
+            {
+                title: "1. Pengantar: Mengenal Relasi",
+                content: `
+                    <p class="mb-4">Perhatikan wisata observasi <b>Hiu Paus di Botubarani, Gorontalo</b>. Setiap pengunjung yang datang memiliki tujuan melihat atau berinteraksi dengan hiu paus tertentu. Hubungan antara "Himpunan Pengunjung" dan "Himpunan Hiu Paus" ini dalam matematika disebut sebagai <b>Relasi</b>.</p>
+                    <p class="mb-4"><b>Relasi</b> dari himpunan A ke himpunan B adalah aturan yang menghubungkan (memasangkan) anggota-anggota himpunan A dengan anggota-anggota himpunan B.</p>
+                    <div class="bg-green-50 p-4 rounded-lg border-l-4 border-kemenag-green my-4">
+                        <p class="font-arabic text-2xl text-right text-kemenag-green mb-2">إِنَّا كُلَّ شَيْءٍ خَلَقْنَاهُ بِقَدَرٍ</p>
+                        <p class="text-sm italic">"Sungguh, Kami menciptakan segala sesuatu menurut ukuran." (QS. Al-Qamar: 49)</p>
+                    </div>
+                    <p class="text-sm text-gray-600"><b>KBC:</b> Allah SWT menciptakan ekosistem laut dengan aturan relasi makanan yang seimbang. Kita wajib mencintai kelestarian alam ciptaan-Nya.</p>
+                `,
+                quiz: {
+                    q: "Manakah yang merupakan pengertian relasi?",
+                    options: ["Aturan yang menghubungkan himpunan A dan B", "Aturan yang melarang hubungan dua himpunan", "Aturan yang mengharuskan satu himpunan kosong"],
+                    ans: 0
+                }
+            },
+            {
+                title: "2. Konsep Fungsi (Pemetaan)",
+                content: `
+                    <p class="mb-4">Fungsi adalah bentuk <b>relasi khusus</b>. Syarat sebuah relasi dikatakan Fungsi (Pemetaan) dari himpunan A ke himpunan B adalah:</p>
+                    <div class="bg-blue-50 p-4 rounded-lg text-center font-bold text-blue-800 border border-blue-200 shadow-inner mb-4">
+                        "Setiap anggota himpunan A dipasangkan dengan TEPAT SATU anggota himpunan B."
+                    </div>
+                    <p class="mb-4"><b>Analogi:</b> Setiap masyarakat Provinsi Gorontalo (Himpunan A) hanya memiliki TEPAT SATU Nomor Induk Kependudukan / NIK (Himpunan B). Tidak mungkin satu orang punya dua NIK, dan tidak mungkin ada orang tanpa NIK.</p>
+                    <p class="text-sm text-gray-600 mt-4 border-t pt-2"><b>KBC:</b> Keteraturan pemetaan ini mengajarkan kita tentang kejujuran identitas dan keadilan, sesuai fitrah kemanusiaan.</p>
+                `,
+                quiz: {
+                    q: "Apa syarat utama sebuah relasi disebut fungsi?",
+                    options: ["Setiap anggota A punya lebih dari 1 pasangan di B", "Setiap anggota A punya tepat 1 pasangan di B", "Hanya sebagian anggota A yang punya pasangan di B"],
+                    ans: 1
+                }
+            },
+            {
+                title: "3. Istilah dalam Fungsi",
+                content: `
+                    <p class="mb-4">Dalam mempelajari diagram panah fungsi, kita perlu mengenal 3 istilah penting:</p>
+                    <ul class="list-disc pl-5 space-y-2 mb-4">
+                        <li><b>Domain (Daerah Asal):</b> Seluruh anggota himpunan A (himpunan sebelah kiri).</li>
+                        <li><b>Kodomain (Daerah Kawan):</b> Seluruh anggota himpunan B (himpunan sebelah kanan).</li>
+                        <li><b>Range (Daerah Hasil):</b> Anggota himpunan B yang memiliki pasangan (terkena panah) dari himpunan A.</li>
+                    </ul>
+                    <div class="bg-gray-100 p-4 rounded-lg flex justify-center gap-4 text-sm font-mono border">
+                        <div class="text-center"><b>A</b><br>1<br>2<br>3</div>
+                        <div class="flex items-center text-gray-400">---&gt;</div>
+                        <div class="text-center"><b>B</b><br>a<br>b<br>c</div>
+                    </div>
+                `,
+                quiz: {
+                    q: "Daerah kawan (himpunan tujuan) dalam sebuah fungsi disebut...",
+                    options: ["Domain", "Kodomain", "Range"],
+                    ans: 1
+                }
+            },
+            {
+                title: "4. Membedakan Fungsi dan Bukan Fungsi",
+                content: `
+                    <p class="mb-4">Bagaimana mengenali diagram panah yang <b>BUKAN FUNGSI</b>? Lihatlah himpunan asal (kiri / Domain). Relasi BUKAN fungsi jika:</p>
+                    <ol class="list-decimal pl-5 space-y-2 mb-4 text-red-700 font-semibold">
+                        <li>Ada anggota himpunan A yang BERCABANG (memiliki 2 atau lebih panah).</li>
+                        <li>Ada anggota himpunan A yang KOSONG (tidak memiliki panah keluar).</li>
+                    </ol>
+                    <p class="mb-4"><b>Contoh Bukan Fungsi:</b> Relasi "makanan favorit" siswa Gorontalo. Siswa A bisa menyukai <i>Binte Biluhuta</i> sekaligus menyukai <i>Ilabulo</i> (Bercabang).</p>
+                    <div class="bg-green-50 p-4 rounded-lg border-l-4 border-kemenag-green my-4">
+                        <p class="font-arabic text-2xl text-right text-kemenag-green mb-2">وَأَقِيمُوا الْوَزْنَ بِالْقِسْطِ وَلَا تُخْسِرُوا الْمِيزَانَ</p>
+                        <p class="text-sm italic">"Dan tegakkanlah timbangan itu dengan adil dan janganlah kamu mengurangi neraca itu." (QS. Ar-Rahman: 9)</p>
+                    </div>
+                `,
+                quiz: {
+                    q: "Sebuah diagram panah disebut BUKAN fungsi jika pada daerah asalnya (kiri)...",
+                    options: ["Ada yang bercabang atau kosong", "Semua memiliki tepat satu panah", "Anggota daerah kawan ada yang tidak dipilih"],
+                    ans: 0
+                }
+            },
+            {
+                title: "5. Kesimpulan & Refleksi",
+                content: `
+                    <p class="mb-4">Mari kita simpulkan! Kunci utama membedakan fungsi dari diagram panah adalah dengan <b>FOKUS PADA HIMPUNAN KIRI (DOMAIN)</b>.</p>
+                    <ul class="list-disc pl-5 space-y-2 mb-6">
+                        <li>Jika semua di kiri tepat punya satu garis panah ➜ <b class="text-green-600">FUNGSI</b></li>
+                        <li>Jika di kiri ada yang double garis / tidak ada garis ➜ <b class="text-red-600">BUKAN FUNGSI</b></li>
+                    </ul>
+                    <div class="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                        <h4 class="font-bold text-amber-800 mb-2">❤️ Nilai Kurikulum Berbasis Cinta:</h4>
+                        <p class="text-sm text-gray-700">Seperti indahnya kerajinan <b>Kain Karawo</b> khas Gorontalo yang disulam dengan satu benang tepat pada polanya agar menjadi karya indah, demikianlah fungsi bekerja. Keteraturan dan kepatuhan pada aturan menjadikan hidup selaras. Mari cintai tanah air dan lestarikan karya budaya kita.</p>
+                    </div>
+                `,
+                quiz: {
+                    q: "Saat menentukan apakah diagram panah itu fungsi atau bukan, bagian mana yang harus menjadi fokus pengamatan?",
+                    options: ["Himpunan Kanan (Kodomain)", "Himpunan Kiri (Domain)", "Arah panah yang menyilang"],
+                    ans: 1
+                }
+            }
+        ];
+
+        let currentMateri = 0;
+        let materiStatus = [false, false, false, false, false];
+
+        function initBelajar() {
+            currentMateri = 0;
+            renderMateri();
+        }
+
+        function renderMateri() {
+            const m = materiData[currentMateri];
+            document.getElementById('materi-counter').innerText = currentMateri + 1;
+            
+            let html = `
+                <h2 class="text-2xl font-bold text-blue-800 mb-6 slide-up">${m.title}</h2>
+                <div class="text-lg text-gray-700 leading-relaxed mb-8 fade-in">${m.content}</div>
+                
+                <!-- Mini Quiz (Pemantik) -->
+                <div class="bg-white p-6 rounded-2xl shadow-md border-t-4 border-blue-400 mt-8 fade-in" id="mini-quiz-box">
+                    <h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-question-circle text-blue-500"></i> Tantangan Pemahaman:</h3>
+                    <p class="mb-4">${m.quiz.q}</p>
+                    <div class="space-y-2">
+                        ${m.quiz.options.map((opt, i) => `
+                            <button onclick="checkMateriQuiz(${i})" class="w-full text-left p-3 rounded-lg border border-gray-300 hover:bg-blue-50 hover:border-blue-300 transition quiz-opt" id="opt-${i}">
+                                ${String.fromCharCode(65+i)}. ${opt}
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            document.getElementById('materi-content').innerHTML = html;
+
+            // Nav Buttons
+            document.getElementById('btn-materi-prev').classList.toggle('hidden', currentMateri === 0);
+            
+            updateMateriNavState();
+        }
+
+        function checkMateriQuiz(selectedIdx) {
+            const m = materiData[currentMateri];
+            const opts = document.querySelectorAll('.quiz-opt');
+            
+            opts.forEach(btn => { btn.disabled = true; btn.classList.remove('hover:bg-blue-50'); });
+            
+            if (selectedIdx === m.quiz.ans) {
+                document.getElementById(`opt-${selectedIdx}`).classList.add('bg-green-100', 'border-green-500', 'text-green-800', 'font-bold');
+                materiStatus[currentMateri] = true;
+                updateMateriNavState();
+                
+                if (currentMateri === 4) {
+                    // Unlock Bermain
+                    appState.progress.belajarCompleted = true;
+                    unlockMenu('bermain');
+                }
+            } else {
+                document.getElementById(`opt-${selectedIdx}`).classList.add('bg-red-100', 'border-red-500', 'text-red-800');
+                document.getElementById(`opt-${m.quiz.ans}`).classList.add('bg-green-100', 'border-green-500', 'font-bold'); // show correct
+                
+                setTimeout(() => {
+                    opts.forEach(btn => {
+                        btn.disabled = false;
+                        btn.className = "w-full text-left p-3 rounded-lg border border-gray-300 hover:bg-blue-50 hover:border-blue-300 transition quiz-opt";
+                    });
+                }, 1500);
+            }
+        }
+
+        function updateMateriNavState() {
+            const btnNext = document.getElementById('btn-materi-next');
+            const statusText = document.getElementById('quiz-status');
+            
+            if (materiStatus[currentMateri]) {
+                btnNext.disabled = false;
+                if (currentMateri === 4) {
+                    btnNext.innerHTML = 'Selesai & Kembali ke Menu <i class="fas fa-home ml-1"></i>';
+                    statusText.innerHTML = '<span class="text-green-600 font-bold"><i class="fas fa-check-circle"></i> Materi Selesai! Menu Bermain Terbuka.</span>';
+                } else {
+                    btnNext.innerHTML = 'Lanjut <i class="fas fa-chevron-right ml-1"></i>';
+                    statusText.innerHTML = '<span class="text-green-600 font-bold"><i class="fas fa-check"></i> Jawaban Benar. Silakan Lanjut.</span>';
+                }
+            } else {
+                btnNext.disabled = true;
+                statusText.innerHTML = 'Selesaikan tantangan di atas untuk lanjut!';
+            }
+        }
+
+        function changeMateri(dir) {
+            if (dir === 1 && currentMateri === 4) {
+                navTo('dashboard-page');
+                return;
+            }
+            currentMateri += dir;
+            renderMateri();
+            window.scrollTo(0,0);
+        }
+
+        // 7. BERMAIN (Balap Game Logic)
+        let gameFrame;
+        let carPos = 0; // 0 = Left Lane, 1 = Right Lane
+        let gameScore = 0;
+        let gameSpeed = 3;
+        let obstacles = [];
+        let isGameActive = false;
+        let frames = 0;
+
+        function createDiagramHTML(isFunction) {
+            // Simple visual representation of arrow diagram
+            // Domain A (3 nodes), Kodomain B (3 nodes)
+            let arrows = [];
+            if(isFunction) {
+                arrows = [{y1: 10, y2: 10}, {y1: 30, y2: 30}, {y1: 50, y2: 10}]; // All 3 have 1 arrow
+            } else {
+                arrows = [{y1: 10, y2: 10}, {y1: 10, y2: 30}, {y1: 50, y2: 50}]; // Node 1 has 2 arrows, Node 2 empty
+            }
+
+            let svgLines = arrows.map(a => `<line x1="0" y1="${a.y1}" x2="100%" y2="${a.y2}" stroke="gray" stroke-width="2" />`).join('');
+
+            return `
+                <div class="diagram-container">
+                    <div class="node-col">
+                        <div class="node"></div><div class="node"></div><div class="node"></div>
+                    </div>
+                    <svg class="svg-lines">${svgLines}</svg>
+                    <div class="node-col">
+                        <div class="node"></div><div class="node"></div><div class="node"></div>
+                    </div>
+                </div>
+                <div class="mt-1 ${isFunction ? 'text-green-600' : 'text-red-600'} font-bold text-xs uppercase">${isFunction ? 'FUNGSI' : 'BUKAN'}</div>
+            `;
+        }
+
+        function startGame() {
+            document.getElementById('game-start-overlay').classList.add('hide');
+            document.getElementById('game-end-overlay').classList.add('hide');
+            gameScore = 0;
+            gameSpeed = 3;
+            frames = 0;
+            obstacles = [];
+            document.getElementById('game-score').innerText = gameScore;
+            
+            // Clear old obstacles
+            document.querySelectorAll('.obstacle').forEach(obs => obs.remove());
+            
+            isGameActive = true;
+            updateCarPosition();
+            gameLoop();
+        }
+
+        function moveCarMobile(dir) {
+            if(!isGameActive) return;
+            carPos = (dir === 'left') ? 0 : 1;
+            updateCarPosition();
+        }
+        
+        // Keyboard controls
+        window.addEventListener('keydown', (e) => {
+            if(!isGameActive) return;
+            if(e.key === 'ArrowLeft' || e.key === 'a') { carPos = 0; updateCarPosition(); }
+            if(e.key === 'ArrowRight' || e.key === 'd') { carPos = 1; updateCarPosition(); }
+        });
+
+        function updateCarPosition() {
+            const car = document.getElementById('player-car');
+            car.style.left = carPos === 0 ? '15%' : '65%';
+        }
+
+        function spawnObstacle() {
+            const lane = Math.random() > 0.5 ? 0 : 1; // 0 left, 1 right
+            const isFunction = Math.random() > 0.5; // True = Fungsi, False = Bukan Fungsi
+            
+            const obs = document.createElement('div');
+            obs.className = 'obstacle';
+            obs.style.left = lane === 0 ? '10%' : '60%';
+            obs.style.top = '-80px';
+            obs.innerHTML = createDiagramHTML(isFunction);
+            
+            document.getElementById('game-board').appendChild(obs);
+            obstacles.push({
+                element: obs,
+                y: -80,
+                lane: lane,
+                isFunction: isFunction,
+                passed: false
+            });
+        }
+
+        function gameLoop() {
+            if(!isGameActive) return;
+
+            frames++;
+            if(frames % Math.max(60, 150 - (gameScore*2)) === 0) {
+                spawnObstacle();
+            }
+
+            for(let i=0; i<obstacles.length; i++) {
+                let obs = obstacles[i];
+                obs.y += gameSpeed;
+                obs.element.style.top = obs.y + 'px';
+
+                // Collision Detection Line (Bottom area)
+                if(obs.y > 380 && obs.y < 480 && !obs.passed) {
+                    if(carPos === obs.lane) {
+                        // Car hit the box
+                        obs.passed = true;
+                        obs.element.style.opacity = '0.5';
+                        
+                        if(obs.isFunction) {
+                            // Hit Function = GOOD (+10)
+                            gameScore += 10;
+                            document.getElementById('game-score').innerText = gameScore;
+                            obs.element.style.borderColor = 'green';
+                        } else {
+                            // Hit Non-Function = BAD (Game Over or -10)
+                            endGame(false);
+                            return;
+                        }
+                    }
+                }
+
+                // Passed without hitting
+                if(obs.y > 500 && !obs.passed) {
+                     obs.passed = true;
+                     if(obs.isFunction && carPos !== obs.lane) {
+                         // Missed a function box (Not penalized heavily, but let's encourage catching them)
+                     }
+                }
+
+                // Cleanup
+                if(obs.y > 600) {
+                    obs.element.remove();
+                    obstacles.splice(i, 1);
+                    i--;
+                }
+            }
+
+            // Increase speed slightly
+            if(frames % 300 === 0 && gameSpeed < 8) gameSpeed += 0.5;
+
+            // Win condition (reach 100 points)
+            if(gameScore >= 100) {
+                endGame(true);
+                return;
+            }
+
+            gameFrame = requestAnimationFrame(gameLoop);
+        }
+
+        function endGame(won) {
+            isGameActive = false;
+            cancelAnimationFrame(gameFrame);
+            appState.scores.game = gameScore;
+            
+            const overlay = document.getElementById('game-end-overlay');
+            document.getElementById('final-score').innerText = gameScore;
+            const feedback = document.getElementById('game-feedback');
+            
+            if(won) {
+                feedback.innerHTML = "Luar biasa! Kamu berhasil menyeleksi 10 Fungsi dengan sempurna.";
+                appState.progress.bermainCompleted = true;
+                unlockMenu('berlatih');
+            } else {
+                feedback.innerHTML = "Awas! Kamu menabrak relasi BUKAN FUNGSI (Aturan bercabang/kosong).<br>Coba lagi!";
+                // Allow them to unlock anyway if they scored > 50, for accessibility
+                if(gameScore >= 50) {
+                    appState.progress.bermainCompleted = true;
+                    unlockMenu('berlatih');
+                    feedback.innerHTML += "<br><span class='text-green-400 font-bold'>Skor mencukupi untuk lanjut.</span>";
+                } else {
+                    document.querySelector('#game-end-overlay button').innerHTML = 'Coba Lagi <i class="fas fa-redo"></i>';
+                    document.querySelector('#game-end-overlay button').onclick = startGame;
+                }
+            }
+            
+            overlay.classList.remove('hide');
+        }
+
+        function finishGame() {
+            navTo('dashboard-page');
+        }
+
+        // 8. BERLATIH (Asesmen)
+        const soalData = [
+            // LEVEL 1 (Dasar / Pemahaman) - Bobot 8
+            {
+                level: 1, bobot: 8,
+                stimulus: `Provinsi Gorontalo dikenal dengan julukan "Bumi Serambi Madinah". Di sebuah MTs di Kota Gorontalo, seorang guru mendata makanan khas favorit murid-muridnya untuk persiapan perayaan Maulid Nabi. Data yang terkumpul adalah sebagai berikut:
+                - Ahmad menyukai Binte Biluhuta.
+                - Fatimah menyukai Ilabulo.
+                - Umar menyukai Binte Biluhuta dan Tili Aya.
+                - Aisyah tidak menyukai makanan khas apapun karena alergi ikan.
+                Hubungan antara himpunan Siswa {Ahmad, Fatimah, Umar, Aisyah} ke himpunan Makanan Khas {Binte Biluhuta, Ilabulo, Tili Aya} dibuat dalam bentuk diagram panah.`,
+                q: "Berdasarkan definisi matematis, apakah relasi tersebut merupakan sebuah FUNGSI?",
+                options: [
+                    "Ya, karena semua siswa ada di kelas yang sama.",
+                    "Ya, karena Binte Biluhuta dipilih oleh dua orang.",
+                    "Tidak, karena Umar memilih 2 makanan (bercabang) dan Aisyah tidak memilih (kosong).",
+                    "Tidak, karena himpunan makanan khas terlalu sedikit."
+                ],
+                ans: 2
+            },
+            {
+                level: 1, bobot: 8,
+                stimulus: `Islam mengajarkan pentingnya menjaga keadilan dan keseimbangan, sebagaimana firman Allah dalam Al-Qur'an Surah Ar-Rahman ayat 7-8. Dalam matematika, prinsip "satu aturan yang pasti dan adil" tercermin dalam konsep pemetaan atau fungsi. 
+                Misalkan terdapat himpunan A = {Pohuwato, Boalemo, Bone Bolango} dan himpunan B = {Provinsi Gorontalo, Provinsi Sulut}. Aturan relasinya adalah "Ibu kota kabupaten yang terletak di..."`,
+                q: "Apa sebutan untuk himpunan A {Pohuwato, Boalemo, Bone Bolango} dalam konsep fungsi?",
+                options: ["Kodomain", "Domain (Daerah Asal)", "Range (Daerah Hasil)", "Relasi Ganda"],
+                ans: 1
+            },
+            {
+                level: 1, bobot: 8,
+                stimulus: `Dalam upaya konservasi Hiu Paus di Desa Botubarani, Gorontalo, petugas mencatat data jumlah pengunjung (Himpunan P) yang memberikan donasi ke kotak amal (Himpunan K). Aturan yang ditetapkan pengelola adalah: "Setiap 1 rombongan pengunjung wajib memasukkan donasi ke tepat 1 kotak amal yang disediakan."`,
+                q: "Jika aturan tersebut digambarkan sebagai relasi dari Himpunan P ke Himpunan K, maka pernyataan yang tepat adalah...",
+                options: [
+                    "Relasi tersebut adalah FUNGSI, karena setiap rombongan dipasangkan tepat satu ke kotak amal.",
+                    "Relasi tersebut BUKAN fungsi, karena kotak amal bisa menerima banyak donasi.",
+                    "Relasi tersebut adalah Kodomain.",
+                    "Relasi tersebut tidak bisa digambar dengan diagram panah."
+                ],
+                ans: 0
+            },
+            // LEVEL 2 (Aplikasi) - Bobot 10
+            {
+                level: 2, bobot: 10,
+                stimulus: `Gorontalo adalah salah satu penghasil komoditas Jagung terbesar di Indonesia. Dinas Pertanian mendata luas lahan panen (dalam Hektar) dari beberapa petani. 
+                Diketahui Himpunan Petani (X) = {Pak Ali, Pak Budi, Pak Hasan} dan Himpunan Luas Lahan (Y) = {2 Ha, 3 Ha, 5 Ha, 7 Ha}.
+                Diketahui relasi dari X ke Y adalah:
+                - Pak Ali memiliki lahan 2 Ha.
+                - Pak Budi memiliki lahan 5 Ha.
+                - Pak Hasan memiliki lahan 2 Ha.`,
+                q: "Berapakah anggota Range (Daerah Hasil) dari fungsi tersebut?",
+                options: [
+                    "{Pak Ali, Pak Budi, Pak Hasan}",
+                    "{2 Ha, 3 Ha, 5 Ha, 7 Ha}",
+                    "{2 Ha, 5 Ha}",
+                    "{3 Ha, 7 Ha}"
+                ],
+                ans: 2
+            },
+            {
+                level: 2, bobot: 10,
+                stimulus: `Kain Karawo merupakan kain tradisional khas Gorontalo hasil sulaman tangan yang membutuhkan ketelitian tingkat tinggi. Misalkan ada sekumpulan motif Karawo (Himpunan M) dan sekumpulan warna benang (Himpunan W). 
+                Seorang pengrajin membuat aturan bahwa: "Satu motif Karawo hanya boleh menggunakan tepat satu warna benang dasar."
+                Namun dalam praktiknya, Motif A menggunakan benang Merah, Motif B menggunakan benang Emas, dan Motif C menggunakan benang Emas dan Hijau.`,
+                q: "Berdasarkan praktik pengrajin tersebut, apakah pemetaan dari Motif ke Warna Benang membentuk suatu fungsi?",
+                options: [
+                    "Ya, karena Emas dipakai oleh dua motif berbeda.",
+                    "Ya, karena semua motif memiliki benang.",
+                    "Tidak, karena Motif C memiliki dua warna benang (bercabang di daerah asal).",
+                    "Tidak, karena benang Hijau tidak disukai pembeli."
+                ],
+                ans: 2
+            },
+            {
+                level: 2, bobot: 10,
+                stimulus: `Danau Limboto adalah ekosistem penting di Gorontalo. Pemerintah menugaskan 4 tim pembersih ekeng gondok (Tim 1, Tim 2, Tim 3, Tim 4) ke 4 zona danau (Zona Utara, Selatan, Timur, Barat).
+                Perintah penugasannya adalah:
+                Tim 1 -> Zona Utara
+                Tim 2 -> Zona Selatan
+                Tim 3 -> Zona Timur
+                Tim 4 -> Zona Selatan`,
+                q: "Jika relasi di atas adalah dari Himpunan Tim ke Himpunan Zona, apakah ini merupakan fungsi? Dan zona mana yang tidak dibersihkan (bukan anggota range)?",
+                options: [
+                    "Bukan Fungsi ; Zona Barat tidak dibersihkan",
+                    "Fungsi ; Zona Barat tidak dibersihkan",
+                    "Fungsi ; Zona Selatan dibersihkan dua kali",
+                    "Bukan Fungsi ; Zona Timur tidak dibersihkan"
+                ],
+                ans: 1
+            },
+            {
+                level: 2, bobot: 10,
+                stimulus: `Di Masjid Agung Baiturrahim Kota Gorontalo, panitia zakat fitrah membagikan beras kepada para mustahik (orang yang berhak menerima). Himpunan Mustahik (M) beranggotakan 50 orang. Himpunan Beras (B) berisi karung-karung beras 2,5 kg. Aturan pembagian adalah: "Setiap mustahik menerima tepat 1 karung beras".`,
+                q: "Secara matematis, syarat apa pada Himpunan M (Domain) yang membuat pembagian ini disebut pemetaan/fungsi yang sempurna?",
+                options: [
+                    "Ada mustahik yang mengambil 2 karung agar adil.",
+                    "Seluruh 50 mustahik mendapat tepat 1 tanda panah ke karung beras, tanpa ada yang terlewat.",
+                    "Ada sisa beras di masjid untuk persediaan.",
+                    "Beberapa mustahik membagi berasnya kepada yang lain."
+                ],
+                ans: 1
+            },
+            // LEVEL 3 (HOTS / Penalaran) - Bobot 12
+            {
+                level: 3, bobot: 12,
+                stimulus: `Sebuah sekolah di Gorontalo menerapkan sistem barcode untuk meminjam buku di perpustakaan. Relasi didefinisikan dari Himpunan Siswa (S) ke Himpunan Buku (B).
+                Sistem database mengalami error dengan gejala sebagai berikut: 
+                "Ketika siswa Amir (S1) men-scan kartu perpustakaannya, sistem mencatat Amir meminjam Buku Matematika sekaligus sistem mencatat Amir meminjam Buku IPA di detik yang sama dari satu kali scan." 
+                Di sisi lain, siswa Budi (S2) yang juga anggota tidak pernah meminjam buku.
+                Jika aturan perpustakaan mensyaratkan "Setiap siswa aktif wajib meminjam tepat 1 buku bacaan per minggu",`,
+                q: "Berdasarkan analisis diagram panah (Siswa ke Buku), letak kegagalan sistem agar relasi ini menjadi FUNGSI adalah...",
+                options: [
+                    "Hanya pada Amir yang bercabang (meminjam 2 buku).",
+                    "Hanya pada Budi yang kosong (tidak meminjam buku).",
+                    "Keduanya salah: Amir bercabang (S1->2 buku) dan Budi kosong (S2->0 buku) melanggar syarat fungsi di domain.",
+                    "Sistem sudah benar karena Amir rajin membaca."
+                ],
+                ans: 2
+            },
+            {
+                level: 3, bobot: 12,
+                stimulus: `Benteng Otanaha adalah cagar budaya peninggalan Raja Ilato di Gorontalo yang memiliki 3 buah benteng (Otanaha, Otahiya, Ulupahu). Dinas Pariwisata membuat jalur wisata (Relasi R) dari Himpunan Pemandu Wisata (P) yang terdiri dari 5 orang, ke Himpunan Benteng (B).
+                Agar pelayanan maksimal dan merata, Kepala Dinas menginstruksikan: "Relasi R BUKAN sekadar fungsi biasa, tetapi setiap pemandu harus tersebar, dan sayangnya jumlah pemandu (5) lebih banyak dari jumlah benteng (3)."`,
+                q: "Menganalisis situasi di atas, mungkinkah kita membuat pemetaan (fungsi) dari Himpunan P ke Himpunan B di mana setiap benteng HANYA diisi oleh 1 pemandu?",
+                options: [
+                    "Mungkin, karena 5 lebih besar dari 3.",
+                    "Tidak mungkin. Karena anggota Domain (5) lebih besar dari Kodomain (3), pasti ada Benteng yang ditunjuk oleh lebih dari 1 Pemandu (bercabang di Kodomain). Ini tetap disebut Fungsi.",
+                    "Tidak mungkin, karena ini membuat relasi menjadi Bukan Fungsi.",
+                    "Mungkin, asalkan 2 pemandu disuruh pulang."
+                ],
+                ans: 1
+            },
+            {
+                level: 3, bobot: 12,
+                stimulus: `Cinta tanah air dan lingkungan adalah wujud syukur kepada Allah SWT (Kurikulum Berbasis Cinta). Sebuah komunitas peduli Teluk Tomini Gorontalo mencatat relasi (F) dari Himpunan Jenis Terumbu Karang (K) ke Himpunan Tingkat Kerusakan (T) = {Rendah, Sedang, Parah}.
+                Diagram panah menunjukkan bahwa: Karang Jahe -> Parah, Karang Otak -> Sedang, Karang Meja -> Parah.
+                Seorang anggota komunitas berpendapat, "Diagram ini bukan fungsi karena status 'Parah' dipilih oleh dua jenis karang (Jahe dan Meja)."`,
+                q: "Bagaimana kamu mengevaluasi pendapat anggota komunitas tersebut berdasarkan konsep fungsi?",
+                options: [
+                    "Pendapatnya BENAR. Fungsi tidak boleh ada hasil yang sama di sebelah kanan.",
+                    "Pendapatnya SALAH. Diagram itu tetap FUNGSI, karena percabangan terjadi di Kodomain (kanan), bukan di Domain (kiri). Setiap jenis karang tepat memiliki satu status.",
+                    "Pendapatnya BENAR, karena kerusakan parah tidak boleh terjadi pada terumbu karang.",
+                    "Pendapatnya SALAH, karena jumlah himpunannya tidak sama."
+                ],
+                ans: 1
+            }
+        ];
+
+        let currentSoal = 0;
+
+        function initBerlatih() {
+            currentSoal = 0;
+            appState.scores.answers = new Array(10).fill(null);
+            renderSoal();
+        }
+
+        function renderSoal() {
+            const s = soalData[currentSoal];
+            document.getElementById('soal-counter').innerText = currentSoal + 1;
+            
+            // Set Badge
+            const badge = document.getElementById('soal-level-badge');
+            if(s.level === 1) { badge.className = "bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full uppercase"; badge.innerText = "Level 1 - Pemahaman (Dasar)"; }
+            else if(s.level === 2) { badge.className = "bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full uppercase"; badge.innerText = "Level 2 - Aplikasi (Sedang)"; }
+            else { badge.className = "bg-purple-100 text-purple-800 text-xs font-bold px-3 py-1 rounded-full uppercase"; badge.innerText = "Level 3 - HOTS (Penalaran)"; }
+            
+            document.getElementById('soal-bobot').innerText = `Bobot: ${s.bobot} Poin`;
+            document.getElementById('soal-stimulus').innerHTML = s.stimulus;
+            document.getElementById('soal-pertanyaan').innerText = `${currentSoal + 1}. ${s.q}`;
+
+            // Options
+            const optContainer = document.getElementById('soal-opsi');
+            optContainer.innerHTML = s.options.map((opt, i) => `
+                <label class="block p-4 rounded-xl border-2 ${appState.scores.answers[currentSoal] === i ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-white hover:border-red-300'} cursor-pointer transition">
+                    <div class="flex items-center">
+                        <input type="radio" name="opsi" value="${i}" class="w-5 h-5 text-red-600 focus:ring-red-500" ${appState.scores.answers[currentSoal] === i ? 'checked' : ''} onchange="selectAnswer(${i})">
+                        <span class="ml-3 text-gray-700">${String.fromCharCode(65+i)}. ${opt}</span>
+                    </div>
+                </label>
+            `).join('');
+
+            // Buttons
+            document.getElementById('btn-soal-prev').classList.toggle('hidden', currentSoal === 0);
+            
+            const btnNext = document.getElementById('btn-soal-next');
+            if(currentSoal === 9) {
+                btnNext.innerHTML = 'Kirim & Lihat Hasil <i class="fas fa-paper-plane ml-2"></i>';
+                btnNext.onclick = calculateScore;
+            } else {
+                btnNext.innerHTML = 'Selanjutnya <i class="fas fa-chevron-right ml-2"></i>';
+                btnNext.onclick = () => changeSoal(1);
+            }
+        }
+
+        function selectAnswer(idx) {
+            appState.scores.answers[currentSoal] = idx;
+            renderSoal(); // re-render to show selected styling
+        }
+
+        function changeSoal(dir) {
+            currentSoal += dir;
+            renderSoal();
+            document.getElementById('berlatih-page').scrollTo(0,0);
+        }
+
+        function calculateScore() {
+            // Check if all answered
+            if(appState.scores.answers.includes(null)) {
+                showCustomAlert("Belum Selesai", "Terdapat soal yang belum dijawab. Mohon periksa kembali jawaban Anda.");
+                return;
+            }
+
+            let total = 0, l1 = 0, l2 = 0, l3 = 0;
+            let jumlahBenar = 0;
+            let jumlahSalah = 0;
+            let detailJawaban = [];
+            
+            soalData.forEach((s, i) => {
+                const userAnsIdx = appState.scores.answers[i];
+                const isCorrect = (userAnsIdx === s.ans);
+                const userLetter = String.fromCharCode(65 + userAnsIdx);
+                
+                detailJawaban.push(`${userLetter} (${isCorrect ? 'Benar' : 'Salah'})`);
+
+                if(isCorrect) {
+                    total += s.bobot;
+                    jumlahBenar++;
+                    if(s.level === 1) l1++;
+                    if(s.level === 2) l2++;
+                    if(s.level === 3) l3++;
+                } else {
+                    jumlahSalah++;
+                }
+            });
+
+            appState.scores.quiz = { total, l1, l2, l3 };
+            appState.progress.berlatihCompleted = true;
+            
+            // --- PROSES KIRIM DATA KE GOOGLE SHEETS ---
+            if (GAS_URL === "URL_GAS_ANDA_DISINI" || GAS_URL === "") {
+                console.warn("Peringatan: URL GAS belum diatur! Data tidak akan terkirim ke Spreadsheet.");
+                finishCalculateScore();
+                return;
+            }
+
+            const payload = {
+                nama: appState.student.name,
+                kelas: appState.student.class,
+                skorBermain: appState.scores.game,
+                skorBerlatih: total,
+                jumlahBenar: jumlahBenar,
+                jumlahSalah: jumlahSalah,
+                detailJawaban: detailJawaban
+            };
+
+            const btnNext = document.getElementById('btn-soal-next');
+            btnNext.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+            btnNext.disabled = true;
+
+            // Mengirim data tanpa harus mengunci UI jika internet lambat
+            fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload),
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+            })
+            .then(res => res.json())
+            .then(res => {
+                console.log("Berhasil disimpan ke Spreadsheet", res);
+                finishCalculateScore();
+            })
+            .catch(err => {
+                console.error("Gagal menyimpan:", err);
+                showCustomAlert("Informasi", "Koneksi ke server lambat/gagal, namun hasil belajarmu tetap akan ditampilkan.");
+                finishCalculateScore();
+            });
+        }
+
+        function finishCalculateScore() {
+            const btnNext = document.getElementById('btn-soal-next');
+            btnNext.innerHTML = 'Kirim & Lihat Hasil <i class="fas fa-paper-plane ml-2"></i>';
+            btnNext.disabled = false;
+
+            generateReportData();
+            navTo('report-page');
+        }
+
+        // 9. Laporan PDF (Report Logic)
+        function generateReportData() {
+            document.getElementById('rep-name').innerText = appState.student.name;
+            document.getElementById('rep-class').innerText = appState.student.class;
+            
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+            document.getElementById('rep-date').innerText = dateStr;
+            document.getElementById('rep-today').innerText = dateStr;
+
+            // Game
+            const gs = appState.scores.game;
+            document.getElementById('rep-game-score').innerText = gs;
+            document.getElementById('rep-game-bar').style.width = Math.min(gs, 100) + '%';
+
+            // Quiz
+            const qs = appState.scores.quiz;
+            document.getElementById('rep-quiz-score').innerText = qs.total;
+            document.getElementById('rep-l1').innerText = `${qs.l1}/3 Soal (${qs.l1 * 8} Poin)`;
+            document.getElementById('rep-l2').innerText = `${qs.l2}/4 Soal (${qs.l2 * 10} Poin)`;
+            document.getElementById('rep-l3').innerText = `${qs.l3}/3 Soal (${qs.l3 * 12} Poin)`;
+
+            // Predikat
+            const predElement = document.getElementById('rep-predikat');
+            if(qs.total >= 90) { predElement.innerHTML = "SANGAT BAIK (A) <i class='fas fa-star text-yellow-500'></i>"; }
+            else if(qs.total >= 75) { predElement.innerHTML = "BAIK (B) <i class='fas fa-check-circle text-green-500'></i>"; }
+            else { predElement.innerHTML = "PERLU BIMBINGAN (C) <i class='fas fa-exclamation-triangle text-orange-500'></i>"; predElement.className = "text-right text-sm font-bold text-orange-600 mb-4"; }
+        }
+
+        function generatePDF() {
+            const element = document.getElementById('print-area');
+            const opt = {
+                margin:       0,
+                filename:     `Laporan_MPI_${appState.student.name.replace(/\s+/g, '_')}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+            };
+
+            // Fallback for mobile browsers that block html2pdf blob generation
+            try {
+                html2pdf().set(opt).from(element).save();
+            } catch(e) {
+                console.log("PDF Library failed, using print dialog fallback.");
+                window.print();
+            }
+        }
+    </script>
+</body>
+</html>
